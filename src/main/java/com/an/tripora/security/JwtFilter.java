@@ -2,6 +2,7 @@ package com.an.tripora.security;
 
 import com.an.tripora.services.JwtService;
 import com.an.tripora.services.MyUserDetailsService;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +28,16 @@ public class JwtFilter extends OncePerRequestFilter {
     ApplicationContext context;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+
+        String path = request.getServletPath();
+
+        return (path.startsWith("/api/auth/") && !path.equals("/api/auth/get-name"))
+                || path.startsWith("/oauth2/")
+                || path.startsWith("/login/");
+    }
+
+    @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
@@ -42,7 +53,15 @@ public class JwtFilter extends OncePerRequestFilter {
 
             token = authHeader.substring(7);
 
-            email = jwtService.extractEmail(token);
+            try {
+                email = jwtService.extractEmail(token);
+            } catch (ExpiredJwtException e) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            } catch (Exception e) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
         }
 
         if (email != null

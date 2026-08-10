@@ -5,6 +5,6 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class GetNameResponse {
-    private String name;
+public class ForgotPasswordResponse {
+    private String message;
 }

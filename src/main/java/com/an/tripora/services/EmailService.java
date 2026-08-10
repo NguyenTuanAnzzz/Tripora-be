@@ -15,7 +15,7 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
-    public void sendOtp(String email, String otp) {
+    public void sendOtp(String email, String otp, String title) {
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -24,7 +24,7 @@ public class EmailService {
                     new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setTo(email);
-            helper.setSubject("Tripora — Verify your email");
+            helper.setSubject(title);
 
             String html = """
                     <!DOCTYPE html>
