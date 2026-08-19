@@ -304,25 +304,6 @@ public class UserService {
     }
 
 
-    public GetNameResponse getName() {
-        Authentication authentication =
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication();
-        String email = authentication.getName();
-
-        User user = repo
-                .findByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found")
-                );
-
-        GetNameResponse response = new GetNameResponse();
-        response.setName(user.getName());
-
-        return response;
-    }
-
     public User loginWithGoogle(String email, String name) {
 
         Optional<User> existingUser =
@@ -455,4 +436,28 @@ public class UserService {
         response.setMesssage("Chúc mừng bạn đã đổi mật khẩu thành công");
         return response;
     }
+
+    public GetInfoResponse getInfo() {
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+        String email = authentication.getName();
+        User user = repo
+                .findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found")
+                );
+
+        GetInfoResponse response = new GetInfoResponse ();
+        response.setName(user.getName());
+        response.setEmail(user.getEmail());
+        response.setPhone(user.getPhone());
+        response.setRole(user.getRole());
+        return response;
+
+    }
+
+
+
 }
