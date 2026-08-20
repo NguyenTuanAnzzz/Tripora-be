@@ -11,8 +11,10 @@ import com.an.tripora.repositories.EmailVerificationRepo;
 import com.an.tripora.repositories.UserRepo;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -44,6 +46,9 @@ public class UserService {
     @Autowired
     private JwtService jwtService;
 
+    @Autowired
+    private CloudinaryService cloudinaryService;
+
     public User saveUser(User user){
         return repo.save(user);
     }
@@ -64,7 +69,6 @@ public class UserService {
 
     public RegisterResponse register(RegisterRequest request) {
 
-        // 1. Kiểm tra email đã tồn tại
         User user = repo.findByEmail(request.getEmail())
                 .orElse(null);
 
@@ -83,7 +87,15 @@ public class UserService {
             }
 
             // PENDING
-            // Cho đăng ký lại và gửi OTP mới
+            if (repo.existsByPhoneAndIdNot(
+                    request.getPhone(),
+                    user.getId()
+            )) {
+                throw new BadRequestException(
+                        "Số điện thoại đã được sử dụng"
+                );
+            }
+
             user.setName(request.getName());
             user.setPhone(request.getPhone());
             user.setPassword(
@@ -96,7 +108,13 @@ public class UserService {
 
         } else {
 
-            // 2. Tạo User mới
+            // User mới
+            if (repo.existsByPhone(request.getPhone())) {
+                throw new BadRequestException(
+                        "Số điện thoại đã được sử dụng"
+                );
+            }
+
             user = new User();
 
             user.setName(request.getName());
@@ -113,19 +131,16 @@ public class UserService {
             user = repo.save(user);
         }
 
-        // 3. Generate OTP
         String otp = generateOtp();
-
-        // 4. Hash OTP
         String otpHash = encoder.encode(otp);
 
-        // 5. Tìm verification hiện tại
         EmailVerification verification =
                 emailVerificationRepo.findByUser(user)
                         .orElseGet(EmailVerification::new);
 
         verification.setUser(user);
         verification.setOtp(otpHash);
+        verification.setVerified(false);
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -135,17 +150,14 @@ public class UserService {
                 now.plusMinutes(5)
         );
 
-        // 6. Save
         emailVerificationRepo.save(verification);
 
-        // 7. Gửi OTP thật
         emailService.sendOtp(
                 user.getEmail(),
                 otp,
                 "Verify OTP to register"
         );
 
-        // 8. Response
         RegisterResponse response = new RegisterResponse();
 
         response.setId(user.getId());
@@ -154,6 +166,8 @@ public class UserService {
         response.setPhone(user.getPhone());
         response.setRole(user.getRole());
         response.setStatus(user.getStatus());
+        response.setCreatedAt(user.getCreatedAt());
+        response.setUpdatedAt(user.getUpdatedAt());
 
         return response;
     }
@@ -227,6 +241,8 @@ public class UserService {
         response.setUserId(user.getId());
         response.setEmail(user.getEmail());
         response.setStatus(user.getStatus());
+        response.setCreatedAt(user.getCreatedAt());
+        response.setUpdatedAt(user.getUpdatedAt());
 
         return response;
     }
@@ -252,94 +268,141 @@ public class UserService {
     }
 
 
-    public ResendOtpResponse resendOtp( ResendOtpRequest request) {
-        User user = repo.findByEmail(request.getEmail()).orElseThrow(() -> new BadRequestException("Email không tồn tại"));
+    public ResendOtpResponse resendOtp(
+            ResendOtpRequest request
+    ) {
+
+        User user = repo.findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new BadRequestException(
+                                "Email không tồn tại"
+                        )
+                );
+
         if (user.getStatus() == UserStatus.ACTIVE) {
             throw new BadRequestException(
                     "Email đã được xác thực"
             );
-        }if (user.getStatus() == UserStatus.BLOCKED) {
+        }
+
+        if (user.getStatus() == UserStatus.BLOCKED) {
             throw new BadRequestException(
                     "Tài khoản đã bị khóa"
             );
         }
 
-        // 3. Generate OTP
-        String otp = generateOtp();
-
-        // 4. Hash OTP
-        String otpHash = encoder.encode(otp);
-
-        // 5. Tìm EmailVerification
         EmailVerification verification =
                 emailVerificationRepo.findByUser(user)
                         .orElseGet(EmailVerification::new);
 
-        verification.setUser(user);
-        verification.setOtp(otpHash);
-
         LocalDateTime now = LocalDateTime.now();
 
+        if (verification.getLastSentAt() != null
+                && now.isBefore(
+                verification.getLastSentAt()
+                        .plusMinutes(1)
+        )) {
+
+            throw new BadRequestException(
+                    "Vui lòng đợi 1 phút trước khi gửi lại OTP"
+            );
+        }
+
+        String otp = generateOtp();
+        String otpHash = encoder.encode(otp);
+
+        verification.setUser(user);
+        verification.setOtp(otpHash);
+        verification.setVerified(false);
         verification.setCreatedAt(now);
         verification.setLastSentAt(now);
         verification.setExpiresAt(
                 now.plusMinutes(5)
         );
-        // 6. Save OTP mới
+
         emailVerificationRepo.save(verification);
 
-        // 7. Gửi OTP
         emailService.sendOtp(
                 user.getEmail(),
                 otp,
                 "Verify OTP to register"
         );
 
-        // 8. Response
         ResendOtpResponse response =
                 new ResendOtpResponse();
 
         response.setMessage("OTP đã được gửi lại");
+
         return response;
     }
 
 
-    public User loginWithGoogle(String email, String name) {
+    public User loginWithGoogle(
+            String email,
+            String name,
+            String avatar
+    ) {
 
         Optional<User> existingUser =
                 repo.findByEmail(email);
 
         if (existingUser.isPresent()) {
-            return existingUser.get();
+
+            User user = existingUser.get();
+
+            if (user.getStatus() == UserStatus.BLOCKED) {
+                throw new BadRequestException(
+                        "Tài khoản đã bị khóa"
+                );
+            }
+
+            // Có thể cập nhật thông tin Google mới nhất
+            user.setName(name);
+            user.setAvatar(avatar);
+
+            return repo.save(user);
         }
 
         User user = new User();
 
         user.setEmail(email);
         user.setName(name);
+        user.setAvatar(avatar);
         user.setRole(Role.CUSTOMER);
         user.setStatus(UserStatus.ACTIVE);
 
         return repo.save(user);
     }
 
-    public ForgotPasswordResponse forgotPassword( ForgotPasswordRequest request) {
-        User user = repo.findByEmail(request.getEmail()).orElseThrow(() -> new BadRequestException("Email không tồn tại"));
+    public ForgotPasswordResponse forgotPassword(
+            ForgotPasswordRequest request
+    ) {
+
+        User user = repo.findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new BadRequestException(
+                                "Email không tồn tại"
+                        )
+                );
+
+        if (user.getStatus() == UserStatus.BLOCKED) {
+            throw new BadRequestException(
+                    "Tài khoản đã bị khóa"
+            );
+        }
 
         String otp = generateOtp();
-
-
         String otpHash = encoder.encode(otp);
 
         EmailVerification verification =
                 emailVerificationRepo.findByUser(user)
                         .orElseGet(EmailVerification::new);
 
-        verification.setUser(user);
-        verification.setOtp(otpHash);
-
         LocalDateTime now = LocalDateTime.now();
 
+        verification.setUser(user);
+        verification.setOtp(otpHash);
+        verification.setVerified(false);
         verification.setCreatedAt(now);
         verification.setLastSentAt(now);
         verification.setExpiresAt(
@@ -357,18 +420,27 @@ public class UserService {
         ForgotPasswordResponse response =
                 new ForgotPasswordResponse();
 
-        response.setMessage("OTP đã được gửi lại");
-        return  response;
+        response.setMessage("OTP đã được gửi");
+
+        return response;
     }
 
 
-    public VerifyForgotPasswordResponse verifyForgotPassword( VerifyForgotPasswordRequest request) {
+    public VerifyForgotPasswordResponse verifyForgotPassword(
+            VerifyForgotPasswordRequest request
+    ) {
+
         User user = repo.findByEmail(request.getEmail())
                 .orElseThrow(() ->
                         new BadRequestException(
                                 "Email không tồn tại"
                         )
                 );
+        if (user.getStatus() == UserStatus.BLOCKED) {
+            throw new BadRequestException(
+                    "Tài khoản đã bị khóa"
+            );
+        }
 
         EmailVerification verification =
                 emailVerificationRepo.findByUser(user)
@@ -378,7 +450,6 @@ public class UserService {
                                 )
                         );
 
-        // 4. Kiểm tra OTP hết hạn
         if (LocalDateTime.now().isAfter(
                 verification.getExpiresAt()
         )) {
@@ -387,7 +458,6 @@ public class UserService {
             );
         }
 
-        // 5. Kiểm tra OTP
         if (!encoder.matches(
                 request.getOtp(),
                 verification.getOtp()
@@ -397,30 +467,31 @@ public class UserService {
             );
         }
 
-        // 6. Xác thực email
-        user.setStatus(UserStatus.ACTIVE);
-        repo.save(user);
+        verification.setVerified(true);
+        emailVerificationRepo.save(verification);
 
-
-
-        // 8. Response
         VerifyForgotPasswordResponse response =
                 new VerifyForgotPasswordResponse();
 
         response.setMessage(
-                "Xác thực email thành công"
+                "Xác thực OTP thành công"
         );
+
         return response;
     }
 
 
-    public ChangPasswordResponse changePassword(@Valid ChangPasswordRequest request) {
+    public ChangPasswordResponse changePassword(
+            @Valid ChangPasswordRequest request
+    ) {
+
         User user = repo.findByEmail(request.getEmail())
                 .orElseThrow(() ->
                         new BadRequestException(
                                 "Email không tồn tại"
                         )
                 );
+
         EmailVerification verification =
                 emailVerificationRepo.findByUser(user)
                         .orElseThrow(() ->
@@ -428,12 +499,36 @@ public class UserService {
                                         "Không tìm thấy mã xác thực"
                                 )
                         );
-        user.setPassword(encoder.encode(request.getNewPassword()));
+
+        if (!verification.isVerified()) {
+            throw new BadRequestException(
+                    "Bạn chưa xác thực OTP"
+            );
+        }
+
+        if (LocalDateTime.now().isAfter(
+                verification.getExpiresAt()
+        )) {
+            throw new BadRequestException(
+                    "Mã OTP đã hết hạn"
+            );
+        }
+
+        user.setPassword(
+                encoder.encode(request.getNewPassword())
+        );
 
         repo.save(user);
-        ChangPasswordResponse response = new ChangPasswordResponse();
+
         emailVerificationRepo.delete(verification);
-        response.setMesssage("Chúc mừng bạn đã đổi mật khẩu thành công");
+
+        ChangPasswordResponse response =
+                new ChangPasswordResponse();
+
+        response.setMesssage(
+                "Chúc mừng bạn đã đổi mật khẩu thành công"
+        );
+
         return response;
     }
 
@@ -454,10 +549,192 @@ public class UserService {
         response.setEmail(user.getEmail());
         response.setPhone(user.getPhone());
         response.setRole(user.getRole());
+        response.setAvatar(user.getAvatar());
+        response.setCreatedAt(user.getCreatedAt());
+        response.setUpdatedAt(user.getUpdatedAt());
         return response;
 
     }
 
+    public EnterPhoneResponse enterPhone(
+            EnterPhoneRequest request
+    ) {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        String email = authentication.getName();
+
+        User user = repo.findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "User not found"
+                        )
+                );
+
+        if (repo.existsByPhoneAndIdNot(
+                request.getPhone(),
+                user.getId()
+        )) {
+            throw new BadRequestException(
+                    "Số điện thoại đã được sử dụng"
+            );
+        }
+
+        user.setPhone(request.getPhone());
+
+        repo.save(user);
+
+        EnterPhoneResponse response =
+                new EnterPhoneResponse();
+
+        response.setMessage("Thanh cong");
+
+        return response;
+    }
 
 
+    public Page<GetAllUsersResponse> getAllUsers(
+            int page,
+            int size,
+            String keyword,
+            Role role,
+            UserStatus status
+    ) {
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        Page<User> users = repo.searchUsers(
+                keyword,
+                role,
+                status,
+                pageable
+        );
+
+        return users.map(user -> {
+            GetAllUsersResponse response = new GetAllUsersResponse();
+
+            response.setId(user.getId());
+            response.setName(user.getName());
+            response.setEmail(user.getEmail());
+            response.setPhone(user.getPhone());
+            response.setRole(user.getRole());
+            response.setStatus(user.getStatus());
+            response.setAvatar(user.getAvatar());
+            response.setCreatedAt(user.getCreatedAt());
+            response.setUpdatedAt(user.getUpdatedAt());
+
+            return response;
+        });
+    }
+
+
+    public UpdateProfileResponse updateProfile(
+            @Valid UpdateProfileRequest request
+    ) {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        String email = authentication.getName();
+
+        User user = repo.findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "User not found"
+                        )
+                );
+
+        if (repo.existsByPhoneAndIdNot(
+                request.getPhone(),
+                user.getId()
+        )) {
+            throw new BadRequestException(
+                    "Số điện thoại đã được sử dụng"
+            );
+        }
+
+        user.setName(request.getName());
+        user.setPhone(request.getPhone());
+
+        // Nếu user có upload avatar mới
+        if (request.getAvatar() != null
+                && !request.getAvatar().isEmpty()) {
+
+            String avatarUrl =
+                    cloudinaryService.uploadImage(
+                            request.getAvatar()
+                    );
+
+            user.setAvatar(avatarUrl);
+        }
+
+        repo.save(user);
+
+        UpdateProfileResponse response =
+                new UpdateProfileResponse();
+
+        response.setMessage("Successfully");
+
+        return response;
+    }
+
+    public CreateUserResponse creatUser(CreateUserRequest request) {
+
+        // 1. Kiểm tra email đã tồn tại
+        if (repo.findByEmail(request.getEmail()).isPresent()) {
+            throw new BadRequestException(
+                    "Email đã được sử dụng"
+            );
+        }
+
+        // 2. Kiểm tra phone đã tồn tại
+        if (repo.existsByPhone(request.getPhone())) {
+            throw new BadRequestException(
+                    "Số điện thoại đã được sử dụng"
+            );
+        }
+
+        // 3. Tạo User
+        User user = new User();
+
+        user.setName(request.getName());
+        user.setEmail(request.getEmail());
+
+        // Không lưu password dạng plain text
+        user.setPassword(
+                encoder.encode(request.getPassword())
+        );
+
+        user.setPhone(request.getPhone());
+        user.setRole(request.getRole());
+        user.setStatus(request.getStatus());
+        user.setAvatar(request.getAvatar());
+
+        // 4. Lưu database
+        user = repo.save(user);
+
+        // 5. Tạo response
+        CreateUserResponse response =
+                new CreateUserResponse();
+
+        response.setId(user.getId());
+        response.setName(user.getName());
+        response.setEmail(user.getEmail());
+        response.setPhone(user.getPhone());
+        response.setRole(user.getRole());
+        response.setStatus(user.getStatus());
+        response.setAvatar(user.getAvatar());
+        response.setCreatedAt(user.getCreatedAt());
+        response.setUpdatedAt(user.getUpdatedAt());
+        response.setMessage(
+                "Tạo tài khoản thành công"
+        );
+
+        return response;
+    }
 }

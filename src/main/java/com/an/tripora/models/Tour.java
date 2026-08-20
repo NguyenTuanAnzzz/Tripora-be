@@ -64,4 +64,12 @@ public class Tour {
     @CollectionTable(name = "tour_images", joinColumns = @JoinColumn(name = "tour_id"))
     @Column(name = "image_url")
     private List<String> images;
+
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(updatable = false, name = "created_at")
+    private java.time.LocalDateTime createdAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
 }

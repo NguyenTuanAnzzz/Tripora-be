@@ -15,4 +15,5 @@ public class VerifyOtpResponse {
     private String email;
 
     private UserStatus status;
-}
+    private java.time.LocalDateTime createdAt;
+    private java.time.LocalDateTime updatedAt;}

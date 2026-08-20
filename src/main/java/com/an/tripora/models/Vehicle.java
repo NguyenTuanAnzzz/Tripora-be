@@ -19,4 +19,12 @@ public class Vehicle {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(updatable = false, name = "created_at")
+    private java.time.LocalDateTime createdAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
 }

@@ -23,7 +23,7 @@ public class User {
     private String email;
 
     private String password;
-
+    @Column(unique = true)
     private String phone;
 
     @Enumerated(EnumType.STRING)
@@ -31,4 +31,14 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     private UserStatus status;
+
+    private String avatar;
+
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(updatable = false, name = "created_at")
+    private java.time.LocalDateTime createdAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
 }

@@ -33,8 +33,8 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
 
         String email = oauth2User.getAttribute("email");
         String name = oauth2User.getAttribute("name");
-
-        service.loginWithGoogle(email, name);
+        String avatar = oauth2User.getAttribute("picture");
+        service.loginWithGoogle(email, name, avatar);
         String token = jwtService.generateToken(email);
 
         // Tạo cookie để truyền token về frontend một cách an toàn hơn

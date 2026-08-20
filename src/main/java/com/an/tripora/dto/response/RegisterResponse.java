@@ -15,5 +15,7 @@ public class RegisterResponse {
     private String phone;
     private Role role;
     private UserStatus status;
-}
+    private java.time.LocalDateTime createdAt;
+    private java.time.LocalDateTime updatedAt;
 
+}

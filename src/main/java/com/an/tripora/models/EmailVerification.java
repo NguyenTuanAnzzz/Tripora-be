@@ -17,7 +17,11 @@ public class EmailVerification {
     private Long id;
 
     @OneToOne
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @JoinColumn(
+            name = "user_id",
+            nullable = false,
+            unique = true
+    )
     private User user;
 
     @Column(nullable = false)
@@ -31,5 +35,7 @@ public class EmailVerification {
 
     @Column(nullable = false)
     private LocalDateTime lastSentAt;
-}
 
+    @Column(nullable = false)
+    private boolean verified = false;
+}

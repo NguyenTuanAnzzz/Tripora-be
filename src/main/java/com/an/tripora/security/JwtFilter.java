@@ -32,7 +32,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String path = request.getServletPath();
 
-        return (path.startsWith("/api/auth/") && !path.equals("/api/auth/get-name"))
+        return (path.startsWith("/api/auth/") )
                 || path.startsWith("/oauth2/")
                 || path.startsWith("/login/");
     }
@@ -49,16 +49,18 @@ public class JwtFilter extends OncePerRequestFilter {
         String token = null;
         String email = null;
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+        if (authHeader != null && authHeader.startsWith("Bearer ") && !authHeader.equals("Bearer null")) {
 
             token = authHeader.substring(7);
 
             try {
                 email = jwtService.extractEmail(token);
             } catch (ExpiredJwtException e) {
+                e.printStackTrace();
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             } catch (Exception e) {
+                e.printStackTrace();
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }

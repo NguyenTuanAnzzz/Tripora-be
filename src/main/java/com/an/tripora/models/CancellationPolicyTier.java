@@ -23,4 +23,12 @@ public class CancellationPolicyTier {
 
     @Column(nullable = false)
     private double cancellationFeePercent;
+
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(updatable = false, name = "created_at")
+    private java.time.LocalDateTime createdAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
 }
