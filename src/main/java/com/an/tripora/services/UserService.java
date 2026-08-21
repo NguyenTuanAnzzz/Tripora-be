@@ -737,4 +737,50 @@ public class UserService {
 
         return response;
     }
+
+    public UpdateRoleResponse updateRole(
+            Long id,
+            UpdateRoleRequest request
+    ) {
+
+        User user = repo.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found")
+                );
+
+        // User hiện tại đã là ADMIN thì không cho sửa role
+        if (user.getRole() == Role.ADMIN) {
+            throw new BadRequestException(
+                    "Không thể thay đổi role của ADMIN"
+            );
+        }
+
+        user.setRole(request.getRole());
+        repo.save(user);
+
+        UpdateRoleResponse response = new UpdateRoleResponse();
+        response.setMessage("Successfully");
+
+        return response;
+    }
+
+    public UserDetailResponse userDetail(Long id) {
+
+        User user = repo.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found")
+                );
+
+        UserDetailResponse response = new UserDetailResponse();
+
+        response.setId(user.getId());
+        response.setName(user.getName());
+        response.setEmail(user.getEmail());
+        response.setPhone(user.getPhone());
+        response.setRole(user.getRole());
+        response.setStatus(user.getStatus());
+        response.setAvatar(user.getAvatar());
+        response.setCreatedAt(user.getCreatedAt());
+        return response;
+    }
 }

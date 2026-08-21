@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -106,6 +107,21 @@ public class UserController {
     @PostMapping("users/create-user")
     public CreateUserResponse createUser (@Valid @RequestBody CreateUserRequest request){
         return service.creatUser(request);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/users/{id}/role")
+    public UpdateRoleResponse updateRole(
+            @PathVariable Long id,
+            @RequestBody UpdateRoleRequest request
+    ) {
+        return service.updateRole(id, request);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/users/{id}")
+    public UserDetailResponse userDetail(@PathVariable Long id) {
+        return service.userDetail(id);
     }
 
 }
