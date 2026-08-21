@@ -15,18 +15,16 @@ public class CloudinaryService {
     @Autowired
     private Cloudinary cloudinary;
 
-    public String uploadImage(MultipartFile file) {
+    public Map<String, Object> uploadImage(MultipartFile file) {
 
         try {
 
-            Map uploadResult = cloudinary.uploader().upload(
+            return cloudinary.uploader().upload(
                     file.getBytes(),
                     ObjectUtils.asMap(
                             "resource_type", "image"
                     )
             );
-
-            return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
             throw new RuntimeException(

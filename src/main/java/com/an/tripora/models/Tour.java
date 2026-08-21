@@ -1,6 +1,6 @@
 package com.an.tripora.models;
 
-import com.an.tripora.enums.TourStatus;
+import com.an.tripora.enums.Status;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -46,7 +46,7 @@ public class Tour {
     private int availableSlots;
 
     @Enumerated(EnumType.STRING)
-    private TourStatus status;
+    private Status status;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "destination_id")

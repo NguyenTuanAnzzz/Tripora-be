@@ -665,12 +665,12 @@ public class UserService {
         if (request.getAvatar() != null
                 && !request.getAvatar().isEmpty()) {
 
-            String avatarUrl =
+            java.util.Map<String, Object> uploadResult =
                     cloudinaryService.uploadImage(
                             request.getAvatar()
                     );
 
-            user.setAvatar(avatarUrl);
+            user.setAvatar(uploadResult.get("secure_url").toString());
         }
 
         repo.save(user);

@@ -1,8 +1,15 @@
 package com.an.tripora.models;
 
+import com.an.tripora.enums.Status;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -20,13 +27,23 @@ public class Destination {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    private String imageUrl;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(255) default 'ACTIVE'")
+    private Status status = Status.ACTIVE;
 
-    @org.hibernate.annotations.CreationTimestamp
+    @OneToMany(
+            mappedBy = "destination",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    @OrderBy("displayOrder ASC")
+    private List<DestinationImage> images = new ArrayList<>();
+
+    @CreationTimestamp
     @Column(updatable = false, name = "created_at")
-    private java.time.LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
-    @org.hibernate.annotations.UpdateTimestamp
+    @UpdateTimestamp
     @Column(name = "updated_at")
-    private java.time.LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
 }
