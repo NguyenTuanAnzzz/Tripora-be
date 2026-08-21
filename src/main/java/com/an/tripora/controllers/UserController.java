@@ -103,7 +103,7 @@ public class UserController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
-    @GetMapping("create-user")
+    @PostMapping("users/create-user")
     public CreateUserResponse createUser (@Valid @RequestBody CreateUserRequest request){
         return service.creatUser(request);
     }
